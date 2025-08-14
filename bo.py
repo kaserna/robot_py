@@ -265,13 +265,13 @@ class MainWindow(QMainWindow):
         try:
             log_content = self.ui.plainTextEdit_10.toPlainText()
             with open(filepath, 'w', encoding='utf-8') as f:
-                f.write(f"=== Robot Control Log ===\n")
-                f.write(f"Saved: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+                f.write(f"=== Лог робота ===\n")
+                f.write(f"Сохранено: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
                 f.write(f"{'-'*50}\n")
                 f.write(log_content)
-            self.log_message(f"Log saved to {filepath}")
+            self.log_message(f"Сохранено в {filepath}")
         except Exception as e:
-            self.log_message(f"Failed to save log: {str(e)}")
+            self.log_message(f"Неудача: {str(e)}")
 
     def system_off(self):
         self.set_indicator_color(self.ui.textBrowser, "red")
