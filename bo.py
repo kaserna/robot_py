@@ -7,7 +7,9 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtWidgets import QMainWindow, QApplication, QFileDialog, QTableWidgetItem
 from PyQt5.QtCore import QThread, pyqtSignal, QTimer
 
-from qt import Ui_MainWindow
+from my_interface import Ui_MainWindow
+
+# 1762040574 - AnyDesk
 
 mm = [0, 0, 0, 0, 0, 0]
 wp = []
@@ -63,8 +65,20 @@ class MainWindow(QMainWindow):
         self.ui.pushButton_16.clicked.connect(self.add0)
         self.ui.pushButton_14.clicked.connect(self.save_table_to_csv)
         self.ui.pushButton_18.clicked.connect(self.tostart)
+        self.ui.pushButton_4.clicked.connect(self.cart)
+        self.ui.pushButton_5.clicked.connect(self.joint)
 
         self.ui.pushButton_6.clicked.connect(self.gripper)
+
+    def cart(self):
+        robot.manualCartMode()
+        robot.setCartesianVelocity([1.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+        time.sleep(1.0)
+
+    def joint(self):
+        robot.manualJointMode()
+        robot.setJointVelocity([-1.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+        time.sleep(1.0)
 
     def tostart(self):
         robot.moveToStart()
@@ -83,11 +97,10 @@ class MainWindow(QMainWindow):
     def update_table2(self, column, value):
         global mm
         try:
-            # Map slider value (-100 to 100) → ticks (0–100), radians, degrees, dummy temp
-            ticks = abs(value)  # 0 to 100
+            ticks = abs(value)
             radians_val = round(value * 3.14159 / 180.0, 4)
             degrees_val = abs(value)
-            temp_val = 25 + (abs(value) // 10)  # Simulated temperature
+            temp_val = 25 + (abs(value) // 10) 
 
             row_labels = [item.text().lower() for item in [
                 self.ui.tableWidget_2.verticalHeaderItem(0),
@@ -149,7 +162,7 @@ class MainWindow(QMainWindow):
         if self.work_remaining <= 0:
             self.work_timer.stop()
             self.system_off()
-            self.log_message("Work completed")
+            self.log_message("Work complete")
 
     def add0(self):
         try:
@@ -169,10 +182,11 @@ class MainWindow(QMainWindow):
             self.ui.pushButton_6.setText("On")
             self.log_message("Gripper turned On")
             robot.toolON()
+            time.wait(0.25)
         else:
             self.ui.pushButton_6.setText("Off")
             self.log_message("Gripper turned Off")
-            robot.toolOFF()
+            robot.toolOFF(0.25)
 
     def add_3_field(self):
         global wp
