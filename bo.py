@@ -141,14 +141,14 @@ class MainWindow(QMainWindow):
             self.log_message("No points to play")
             return
 
-        self.work_remaining = row_count * 5
+        self.work_remaining = row_count
 
         self.set_indicator_color(self.ui.textBrowser, "gray")
         self.set_indicator_color(self.ui.textBrowser_2, "gray")
         self.set_indicator_color(self.ui.textBrowser_3, "green")
         self.set_indicator_color(self.ui.textBrowser_4, "gray")
 
-        print('started')
+        print('started') 
         print(wp, len(wp))
         robot.moveToPointL(wp)
         self.work_timer.start(1000)
