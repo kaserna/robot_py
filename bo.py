@@ -5,7 +5,7 @@ import csv
 from datetime import datetime
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtWidgets import QMainWindow, QApplication, QFileDialog, QTableWidgetItem
-from PyQt5.QtCore import QThread, pyqtSignal, QTimer
+from PyQt5.QtCore import QTimer
 
 from my_interface import Ui_MainWindow
 
@@ -16,7 +16,6 @@ lamp = LedLamp("192.168.56.101")
 robot = RobotControl("192.168.2.100")
 if robot.connect():
     lamp.setLamp("1111")
-
     robot.engage()
     if robot.moveToStart():
         lamp.setLamp("1000")
@@ -33,7 +32,11 @@ class MainWindow(QMainWindow):
         self.gripper_count = 0
         self.work_timer = QTimer()
         self.work_timer.timeout.connect(self.update_work_indicator)
+        self.cycle_timer = QTimer()
+        self.cycle_timer.timeout.connect(self.execute_cycle)
         self.work_remaining = 0
+        self.cycle_count = 0
+        self.total_cycles = 0
 
         self.slider_timer = QTimer()
         self.slider_timer.timeout.connect(self.reset_sliders_if_idle)
@@ -68,6 +71,13 @@ class MainWindow(QMainWindow):
         self.ui.pushButton_4.clicked.connect(self.cart)
         self.ui.pushButton_5.clicked.connect(self.joint)
         self.ui.pushButton_6.clicked.connect(self.gripper)
+        self.ui.pushButton_18.clicked.connect(self.toSt)
+
+
+    def toSt(self):
+        robot.moveToStart()
+        robot.manualJointMode()
+        robot.setJointVelocity([0, 0, 0, 0, 0, 0])
 
     def cart(self):
         robot.manualCartMode()
@@ -78,6 +88,7 @@ class MainWindow(QMainWindow):
         robot.manualJointMode()
         robot.setJointVelocity([-1.0, 0.0, 0.0, 0.0, 0.0, 0.0])
         time.sleep(1.0)
+        self.log_message("moved to start")
 
     def tostart(self):
         robot.moveToStart()
@@ -134,7 +145,7 @@ class MainWindow(QMainWindow):
             ticks = abs(value)
             radians_val = round(value * 3.14159 / 180.0, 4)
             degrees_val = abs(value)
-            temp_val = abs(robot.getActualTemperature())
+            temp_val = abs(value)
 
             row_labels = [item.text().lower() for item in [
                 self.ui.tableWidget_2.verticalHeaderItem(0),
@@ -161,7 +172,6 @@ class MainWindow(QMainWindow):
             mm = [0, 0, 0, 0, 0, 0]
             mm[column] = value / 10.0
             robot.setJointVelocity(mm)
-
             self.log_message(f"Updated motor {column+1} with value {value}")
 
         except Exception as e:
@@ -174,18 +184,38 @@ class MainWindow(QMainWindow):
             self.log_message("No points to play")
             return
 
-        self.work_remaining = row_count * 5
-
         self.set_indicator_color(self.ui.textBrowser, "gray")
         self.set_indicator_color(self.ui.textBrowser_2, "gray")
         self.set_indicator_color(self.ui.textBrowser_3, "green")
         self.set_indicator_color(self.ui.textBrowser_4, "gray")
 
-        print('started')
-        print(wp, len(wp))
-        robot.moveToPointL(wp)
+        if self.ui.spinBox.value() <= 30:
+            self.total_cycles = self.ui.spinBox.value() if self.ui.checkBox.isChecked() else 1
+        else:
+            self.total_cycles = 10000000000
+        self.cycle_count = 0
+        self.execute_cycle()
+
+    def execute_cycle(self):
+        if self.cycle_count >= self.total_cycles:
+            self.work_timer.stop()
+            self.cycle_timer.stop()
+            self.system_off()
+            self.log_message("Cycle completed")
+            return
+
+        self.work_remaining = self.ui.tableWidget_3.rowCount() * 5
         self.work_timer.start(1000)
-        self.log_message(f"Started playing {row_count} points")
+        robot.moveToPointL(wp)
+        self.cycle_count += 1
+        self.log_message(f"Cycle {self.cycle_count}/{self.total_cycles} started")
+
+        if self.cycle_count < self.total_cycles:
+            QtCore.QTimer.singleShot(self.work_remaining * 1000, lambda: None)
+        else:
+            self.work_timer.timeout.disconnect()
+            self.work_timer.timeout.connect(self.update_work_indicator)
+            self.work_timer.start(1000)
 
     def update_work_indicator(self):
         self.work_remaining -= 1
@@ -348,6 +378,7 @@ class MainWindow(QMainWindow):
         self.set_indicator_color(self.ui.textBrowser_3, "gray")
         self.set_indicator_color(self.ui.textBrowser_4, "gray")
         self.work_timer.stop()
+        self.cycle_timer.stop()
         self.log_message("System turned OFF")
 
     def system_pause(self):
@@ -356,6 +387,7 @@ class MainWindow(QMainWindow):
         self.set_indicator_color(self.ui.textBrowser_3, "gray")
         self.set_indicator_color(self.ui.textBrowser_4, "orange")
         self.work_timer.stop()
+        self.cycle_timer.stop()
         self.log_message("System PAUSED")
 
     def system_stop(self):
@@ -364,6 +396,7 @@ class MainWindow(QMainWindow):
         self.set_indicator_color(self.ui.textBrowser_3, "gray")
         self.set_indicator_color(self.ui.textBrowser_4, "gray")
         self.work_timer.stop()
+        self.cycle_timer.stop()
         self.log_message("System STOPPED")
 
 if __name__ == "__main__":
