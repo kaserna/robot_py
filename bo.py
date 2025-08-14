@@ -9,8 +9,6 @@ from PyQt5.QtCore import QThread, pyqtSignal, QTimer
 
 from my_interface import Ui_MainWindow
 
-# 1762040574 - AnyDesk
-
 mm = [0, 0, 0, 0, 0, 0]
 wp = []
 
@@ -26,7 +24,6 @@ if robot.connect():
         robot.setJointVelocity([0, 0, 0, 0, 0, 0])
         print(robot.getActualStateOut(), robot.getRobotMode(), robot.getRobotState())
 
-
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -37,6 +34,10 @@ class MainWindow(QMainWindow):
         self.work_timer = QTimer()
         self.work_timer.timeout.connect(self.update_work_indicator)
         self.work_remaining = 0
+
+        self.slider_timer = QTimer()
+        self.slider_timer.timeout.connect(self.reset_sliders_if_idle)
+        self.last_slider_time = 0
 
         self.connect_buttons()
         self.connect_sliders()
@@ -59,15 +60,13 @@ class MainWindow(QMainWindow):
         self.ui.pushButton_3.clicked.connect(self.system_stop)
         self.ui.pushButton_17.clicked.connect(self.play_table)
         self.ui.pushButton_19.clicked.connect(self.save_logs)
-
         self.ui.pushButton_13.clicked.connect(self.add_3_field)
         self.ui.pushButton_12.clicked.connect(self.delete_row)
-        self.ui.pushButton_16.clicked.connect(self.add0)
+        self.ui.pushButton_16.clicked.connect(self.tostart)
+        self.ui.pushButton_15.clicked.connect(self.load_from_file)
         self.ui.pushButton_14.clicked.connect(self.save_table_to_csv)
-        self.ui.pushButton_18.clicked.connect(self.tostart)
         self.ui.pushButton_4.clicked.connect(self.cart)
         self.ui.pushButton_5.clicked.connect(self.joint)
-
         self.ui.pushButton_6.clicked.connect(self.gripper)
 
     def cart(self):
@@ -84,15 +83,50 @@ class MainWindow(QMainWindow):
         robot.moveToStart()
         robot.manualJointMode()
         robot.setJointVelocity([0, 0, 0, 0, 0, 0])
-        return
+        row_position = self.ui.tableWidget_3.rowCount()
+        self.ui.tableWidget_3.insertRow(row_position)
+        start_coords = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, self.gripper_count % 2]
+        for col, value in enumerate(start_coords):
+            item = QTableWidgetItem(str(value))
+            self.ui.tableWidget_3.setItem(row_position, col, item)
+        global wp
+        wp.append(Waypoint([0.0, 0.0, 0.0, 0.0, 0.0, 0.0]))
 
     def connect_sliders(self):
-        self.ui.verticalSlider.valueChanged.connect(lambda value: self.update_table2(0, value))
-        self.ui.verticalSlider_2.valueChanged.connect(lambda value: self.update_table2(1, value))
-        self.ui.verticalSlider_3.valueChanged.connect(lambda value: self.update_table2(2, value))
-        self.ui.verticalSlider_4.valueChanged.connect(lambda value: self.update_table2(3, value))
-        self.ui.verticalSlider_5.valueChanged.connect(lambda value: self.update_table2(4, value))
-        self.ui.verticalSlider_6.valueChanged.connect(lambda value: self.update_table2(5, value))
+        self.ui.verticalSlider.valueChanged.connect(lambda value: self.slider_moved())
+        self.ui.verticalSlider_2.valueChanged.connect(lambda value: self.slider_moved())
+        self.ui.verticalSlider_3.valueChanged.connect(lambda value: self.slider_moved())
+        self.ui.verticalSlider_4.valueChanged.connect(lambda value: self.slider_moved())
+        self.ui.verticalSlider_5.valueChanged.connect(lambda value: self.slider_moved())
+        self.ui.verticalSlider_6.valueChanged.connect(lambda value: self.slider_moved())
+
+    def slider_moved(self):
+        self.last_slider_time = QtCore.QTime.currentTime().second() + QtCore.QTime.currentTime().msec() / 1000.0
+        self.slider_timer.start(100)
+        sender = self.sender()
+        if sender == self.ui.verticalSlider:
+            self.update_table2(0, sender.value())
+        elif sender == self.ui.verticalSlider_2:
+            self.update_table2(1, sender.value())
+        elif sender == self.ui.verticalSlider_3:
+            self.update_table2(2, sender.value())
+        elif sender == self.ui.verticalSlider_4:
+            self.update_table2(3, sender.value())
+        elif sender == self.ui.verticalSlider_5:
+            self.update_table2(4, sender.value())
+        elif sender == self.ui.verticalSlider_6:
+            self.update_table2(5, sender.value())
+
+    def reset_sliders_if_idle(self):
+        current_time = QtCore.QTime.currentTime().second() + QtCore.QTime.currentTime().msec() / 1000.0
+        if current_time - self.last_slider_time > 5.0:
+            self.ui.verticalSlider.setValue(0)
+            self.ui.verticalSlider_2.setValue(0)
+            self.ui.verticalSlider_3.setValue(0)
+            self.ui.verticalSlider_4.setValue(0)
+            self.ui.verticalSlider_5.setValue(0)
+            self.ui.verticalSlider_6.setValue(0)
+            self.slider_timer.stop()
 
     def update_table2(self, column, value):
         global mm
@@ -100,7 +134,7 @@ class MainWindow(QMainWindow):
             ticks = abs(value)
             radians_val = round(value * 3.14159 / 180.0, 4)
             degrees_val = abs(value)
-            temp_val = 25 + (abs(value) // 10) 
+            temp_val = abs(robot.getActualTemperature())
 
             row_labels = [item.text().lower() for item in [
                 self.ui.tableWidget_2.verticalHeaderItem(0),
@@ -124,9 +158,8 @@ class MainWindow(QMainWindow):
                 item = QTableWidgetItem(display_value)
                 self.ui.tableWidget_2.setItem(row_idx, column, item)
 
-            # Update joint velocity
             mm = [0, 0, 0, 0, 0, 0]
-            mm[column] = value / 10.0  # Scale to rad/s
+            mm[column] = value / 10.0
             robot.setJointVelocity(mm)
 
             self.log_message(f"Updated motor {column+1} with value {value}")
@@ -141,14 +174,14 @@ class MainWindow(QMainWindow):
             self.log_message("No points to play")
             return
 
-        self.work_remaining = row_count
+        self.work_remaining = row_count * 5
 
         self.set_indicator_color(self.ui.textBrowser, "gray")
         self.set_indicator_color(self.ui.textBrowser_2, "gray")
         self.set_indicator_color(self.ui.textBrowser_3, "green")
         self.set_indicator_color(self.ui.textBrowser_4, "gray")
 
-        print('started') 
+        print('started')
         print(wp, len(wp))
         robot.moveToPointL(wp)
         self.work_timer.start(1000)
@@ -182,11 +215,12 @@ class MainWindow(QMainWindow):
             self.ui.pushButton_6.setText("On")
             self.log_message("Gripper turned On")
             robot.toolON()
-            time.wait(0.25)
+            time.sleep(0.25)
         else:
             self.ui.pushButton_6.setText("Off")
             self.log_message("Gripper turned Off")
-            robot.toolOFF(0.25)
+            robot.toolOFF()
+            time.sleep(0.25)
 
     def add_3_field(self):
         global wp
@@ -252,6 +286,41 @@ class MainWindow(QMainWindow):
         except Exception as e:
             self.log_message(f"Error saving CSV: {str(e)}")
 
+    def load_from_file(self):
+        filepath, _ = QFileDialog.getOpenFileName(
+            self, "Load CSV File", "", "CSV Files (*.csv);;All Files (*)"
+        )
+        if not filepath:
+            self.log_message("File load cancelled")
+            return
+
+        try:
+            with open(filepath, 'r', encoding='utf-8') as csvfile:
+                reader = csv.reader(csvfile)
+                headers = next(reader, None)
+
+                for row in reader:
+                    if len(row) < 6:
+                        continue
+                    try:
+                        coords = [float(x) for x in row[:6]]
+                        gripper_val = int(row[6]) if len(row) > 6 else self.gripper_count % 2
+                    except:
+                        continue
+
+                    table_row = self.ui.tableWidget_3.rowCount()
+                    self.ui.tableWidget_3.insertRow(table_row)
+                    for col, value in enumerate(row[:7]):
+                        item = QTableWidgetItem(value)
+                        self.ui.tableWidget_3.setItem(table_row, col, item)
+
+                    global wp
+                    wp.append(Waypoint(coords))
+
+            self.log_message(f"Loaded trajectory from {filepath}")
+        except Exception as e:
+            self.log_message(f"Failed to load file: {str(e)}")
+
     def save_logs(self):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         default_filename = f"log_{timestamp}.txt"
@@ -296,7 +365,6 @@ class MainWindow(QMainWindow):
         self.set_indicator_color(self.ui.textBrowser_4, "gray")
         self.work_timer.stop()
         self.log_message("System STOPPED")
-
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
